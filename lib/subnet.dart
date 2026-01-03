@@ -20,11 +20,12 @@ void run() {
     ipClassType = 'c';
   } else {
     print('Invalid IP');
+    return;
   }
 
   print('IP Class: Class $ipClassType');
 
-  print('press 1 for sub-network, press 2 for CIRD notation, press 3 for no.of host');
+  print('press 1 for sub-network, press 2 for CIDR notation, press 3 for no.of host');
   int select = int.parse(stdin.readLineSync()!);
 
   int need = 0;
@@ -32,7 +33,7 @@ void run() {
   if(select == 1) {
     stdout.write('Enter the sub-net need: ');
     need = int.parse(stdin.readLineSync()!);
-    subnet = bySubnet(need);
+    subnet = bySubnet(need,ipClassType);
   } else if(select == 2) {
     stdout.write('Enter the /');
     need = int.parse(stdin.readLineSync()!);
@@ -40,29 +41,32 @@ void run() {
   } else if(select == 3) {
     stdout.write('Enter the no.of host need: ');
     need = int.parse(stdin.readLineSync()!);
-    subnet = byHost(need);
+    subnet = byHost(need,ipClassType);
   } else {
     print('Invalid Operation');
     return;
   }
+  
+  if(subnet.length == 1) return;
 
-  int jump = subnet[0],sub = subnet[1];
-  List<int> newIp = [ip[0],ipClassType == 'a' ? 0 : ip[1], ipClassType == 'a' || ipClassType == 'b' ? 0 : ip[2], ipClassType == 'a' || ipClassType == 'b' || ipClassType == 'c' ? 0 : ip[3]];
-
+  int jump = subnet[0],sub = subnet[1], ipType = subnet[2];
+  print('Sub-networks: $sub');
+  List<int> newIp = [ip[0],ipType == 1 ? 0 : ip[1], ipType == 1 || ipType == 2 ? 0 : ip[2], ipType == 1 || ipType == 2 || ipType == 3 ? 0 : ip[3]];
+  
   for(int i = 0; i < sub;i++) {
-    if(ipClassType == 'a') {
+    if(ipType == 1) {
       print('Network Ip : ${newIp[0]}.${newIp[1]}.${newIp[2]}.${newIp[3]}');
       print('First Ip   : ${newIp[0]}.${newIp[1] + 1}.${newIp[2]}.${newIp[3]}');
       newIp[1] += jump;
       print('Last Ip    : ${newIp[0]}.${newIp[1] - 1}.${newIp[2]}.${newIp[3]}');
-      print('Broadcast  : ${newIp[0]}.${newIp[1]++}.${newIp[2]}.${newIp[3]}');
-    } else if(ipClassType == 'b') {
+      print('Broadcast  : ${newIp[0]}.${newIp[1]++}.255.255');
+    } else if(ipType == 2) {
       print('Network Ip : ${newIp[0]}.${newIp[1]}.${newIp[2]}.${newIp[3]}');
       print('First Ip   : ${newIp[0]}.${newIp[1]}.${newIp[2] + 1}.${newIp[3]}');
       newIp[2] += jump;
       print('Last Ip    : ${newIp[0]}.${newIp[1]}.${newIp[2] - 1}.${newIp[3]}');
-      print('Broadcast  : ${newIp[0]}.${newIp[1]}.${newIp[2]++}.${newIp[3]}');
-    } else if(ipClassType == 'c') {
+      print('Broadcast  : ${newIp[0]}.${newIp[1]}.${newIp[2]++}.255');
+    } else if(ipType == 3) {
       print('Network Ip : ${newIp[0]}.${newIp[1]}.${newIp[2]}.${newIp[3]}');
       print('First Ip   : ${newIp[0]}.${newIp[1]}.${newIp[2]}.${newIp[3] + 1}');
       newIp[3] += jump;
@@ -75,15 +79,13 @@ void run() {
 
 }
 
-List<int> bySubnet(int sNet) {
+List<int> bySubnet(int sNet, String ipClass) {
   List<int> twoPower = [128,64,32,16,8,4,2,1];
   if(twoPower.contains(sNet)) {
     int n = 7-twoPower.indexOf(sNet);
-    int jump = 0;
-    for(int i = n; i < 8; i++) {
-      jump += twoPower[i];
-    }
-    return [jump,sNet];
+    int ipType = ipClass == 'a' ? 1 : ipClass == 'b' ? 2 : ipClass == 'c' ? 3 : 0;
+    int cird = ipType*8+n;
+    return byCIRD(cird);
   } else {
     print('Invalid Subnet');
   }
@@ -101,18 +103,23 @@ List<int> byCIRD(int cIRD) {
     for (int i = n; i < 8; i++) {
       jump += twoPower[i];
     }
-    return [jump,pow(2,n).toInt()];
+    int ipType = cIRD >= 24 ? 3 : cIRD >= 14 ? 2 : cIRD >= 8 ? 1 : 0; 
+    print('CIDR: /$cIRD');
+    newSubnetMask(cIRD);
+    print('Host per sub-net: ${pow(2,(32 - cIRD))-2}');
+    return [jump,pow(2,n).toInt(),ipType];
   } else {
     print('Invalid Notation');
   }
   return [-1];
 }
 
-List<int> byHost(int hNet) {
+List<int> byHost(int hNet,String classType) {
   int n = 0;
-  if(pow(2, 32) >= hNet && hNet > 0) {
+  int host = classType == 'a' ? 255*255*255 : classType == 'b' ? 255*255 : 255;
+  if( hNet > 1 && host >= hNet) {
     for(int i = 0; i < 32; i++) {
-      if(pow(2, i) >= hNet) {
+      if((pow(2, i)-2) >= hNet) {
         n = 32 - i;
         break;
       }
@@ -122,4 +129,16 @@ List<int> byHost(int hNet) {
     print('Invalid Host');
   }
   return [-1];
+}
+
+void newSubnetMask(int cIRD) {
+  List<int> twoPower = [128, 64, 32, 16, 8, 4, 2, 1];
+  int time = cIRD~/8;
+  int rem = cIRD%8;
+  List<int> mask = [0,0,0,0];
+  for(int i=0;i<time;i++) mask[i] = 255;
+  for(int i=0;i<rem;i++) {
+      mask[time] += twoPower[i];
+  }  
+  print('Subnet Mask = ${mask.join('.')}');
 }
